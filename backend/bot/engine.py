@@ -1,0 +1,126 @@
+import asyncio
+from datetime import datetime
+from typing import Optional
+from .bybit import watch_price, place_order, get_balance
+
+
+class BotConfig:
+    def __init__(self):
+        self.symbol = "BTCUSDT"
+        self.buy_threshold = -1.0
+        self.sell_threshold = 1.0
+        self.max_daily_trades = 10
+        self.trade_amount = 10
+        self.stop_loss = -5.0
+        self.is_running = False
+        self.live_trading = False
+
+
+class TradingEngine:
+    def __init__(self):
+        self.config = BotConfig()
+        self.entry_price: Optional[float] = None
+        self.current_price: float = 0
+        self.daily_trades: int = 0
+        self.trade_history = []
+        self.in_position = False
+        self.balance: float = 0
+
+    def get_status(self):
+        return {
+            "is_running": self.config.is_running,
+            "symbol": self.config.symbol,
+            "current_price": self.current_price,
+            "entry_price": self.entry_price,
+            "in_position": self.in_position,
+            "daily_trades": self.daily_trades,
+            "max_daily_trades": self.config.max_daily_trades,
+            "trade_amount": self.config.trade_amount,
+            "buy_threshold": self.config.buy_threshold,
+            "sell_threshold": self.config.sell_threshold,
+            "stop_loss": self.config.stop_loss,
+            "live_trading": self.config.live_trading,
+            "balance": self.balance,
+            "trade_history": self.trade_history[-20:],
+        }
+
+    async def on_price_update(self, symbol: str, price: float):
+        if symbol.lower() != self.config.symbol.lower():
+            return
+
+        self.current_price = price
+
+        if not self.config.is_running:
+            return
+        if self.daily_trades >= self.config.max_daily_trades:
+            return
+
+        if not self.entry_price:
+            self.entry_price = price
+            print(f"[Engine] Referans fiyat: {price}")
+            return
+
+        change = ((price - self.entry_price) / self.entry_price) * 100
+
+        if not self.in_position:
+            if change <= self.config.buy_threshold:
+                await self.execute_trade("Buy", price)
+        else:
+            if change >= self.config.sell_threshold:
+                await self.execute_trade("Sell", price)
+            elif change <= self.config.stop_loss:
+                await self.execute_trade("Sell", price, reason="STOP_LOSS")
+
+    async def execute_trade(self, side: str, price: float, reason: str = "SIGNAL"):
+        qty = round(self.config.trade_amount / price, 6)
+
+        if self.config.live_trading:
+            result = place_order(self.config.symbol, side, qty)
+            if not result:
+                print(f"[Engine] Emir başarısız, atlandı")
+                return
+
+        trade = {
+            "side": side,
+            "price": price,
+            "qty": qty,
+            "amount_usdt": self.config.trade_amount,
+            "reason": reason,
+            "live": self.config.live_trading,
+            "timestamp": datetime.now().isoformat(),
+        }
+        self.trade_history.append(trade)
+        self.daily_trades += 1
+
+        if side == "Buy":
+            self.in_position = True
+            self.entry_price = price
+        else:
+            self.in_position = False
+            self.entry_price = price
+
+        print(f"[{reason}] {side} @ {price} | qty: {qty} | live: {self.config.live_trading}")
+
+        if self.config.live_trading:
+            self.balance = get_balance("USDT")
+
+    async def start(self):
+        self.config.is_running = True
+        self.daily_trades = 0
+        self.entry_price = None
+        self.in_position = False
+        self.trade_history = []
+        if self.config.live_trading:
+            self.balance = get_balance("USDT")
+        print(f"[Engine] Bot başlatıldı → {self.config.symbol} | Live: {self.config.live_trading}")
+        await watch_price(self.config.symbol, self.on_price_update)
+
+    def stop(self):
+        self.config.is_running = False
+        self.entry_price = None
+        self.in_position = False
+        self.current_price = 0
+        print("[Engine] Bot durduruldu")
+
+
+engine = TradingEngine()
