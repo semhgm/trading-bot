@@ -27,6 +27,8 @@ class TradingEngine:
         self.balance: float = 0
 
     def get_status(self):
+        total_pnl = sum(t.get("pnl", 0) for t in self.trade_history)
+        total_commission = sum(t.get("commission", 0) for t in self.trade_history)
         return {
             "is_running": self.config.is_running,
             "symbol": self.config.symbol,
@@ -41,6 +43,8 @@ class TradingEngine:
             "stop_loss": self.config.stop_loss,
             "live_trading": self.config.live_trading,
             "balance": self.balance,
+            "total_pnl": round(total_pnl, 4),
+            "total_commission": round(total_commission, 4),
             "trade_history": self.trade_history[-20:],
         }
 
@@ -73,6 +77,13 @@ class TradingEngine:
 
     async def execute_trade(self, side: str, price: float, reason: str = "SIGNAL"):
         qty = round(self.config.trade_amount / price, 6)
+        commission_rate = 0.001
+        commission = self.config.trade_amount * commission_rate
+
+        pnl = 0
+        if side == "Sell" and self.entry_price:
+            gross_pnl = (price - self.entry_price) / self.entry_price * self.config.trade_amount
+            pnl = gross_pnl - (commission * 2)
 
         if self.config.live_trading:
             result = place_order(self.config.symbol, side, qty)
@@ -85,6 +96,8 @@ class TradingEngine:
             "price": price,
             "qty": qty,
             "amount_usdt": self.config.trade_amount,
+            "commission": round(commission, 4),
+            "pnl": round(pnl, 4),
             "reason": reason,
             "live": self.config.live_trading,
             "timestamp": datetime.now().isoformat(),
@@ -99,7 +112,7 @@ class TradingEngine:
             self.in_position = False
             self.entry_price = price
 
-        print(f"[{reason}] {side} @ {price} | qty: {qty} | live: {self.config.live_trading}")
+        print(f"[{reason}] {side} @ {price} | pnl: {pnl:.4f} USDT | komisyon: {commission:.4f}")
 
         if self.config.live_trading:
             self.balance = get_balance("USDT")
