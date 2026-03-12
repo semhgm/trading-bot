@@ -9,7 +9,7 @@ import os
 
 load_dotenv()
 
-BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
+BYBIT_WS_URL = "wss://stream.bybit.com/v5/public/spot"
 
 def get_bybit_client():
     return HTTP(
@@ -19,61 +19,31 @@ def get_bybit_client():
     )
 
 async def watch_price(symbol: str, callback: Callable):
-    symbol_lower = symbol.lower()
-    url = f"{BINANCE_WS_URL}/{symbol_lower}@ticker"
-    
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
-    
+
     while True:
         try:
-            async with websockets.connect(url, ssl=ssl_context, ping_interval=20, ping_timeout=10) as ws:
-                print(f"[Binance] {symbol} izleniyor...")
+            async with websockets.connect(BYBIT_WS_URL, ssl=ssl_context, ping_interval=20, ping_timeout=10) as ws:
+                # Bybit'e subscribe ol
+                subscribe_msg = {
+                    "op": "subscribe",
+                    "args": [f"tickers.{symbol}"]
+                }
+                await ws.send(json.dumps(subscribe_msg))
+                print(f"[Bybit] {symbol} izleniyor...")
+
                 async for message in ws:
                     data = json.loads(message)
-                    price = float(data.get("c", 0))
-                    if price > 0:
-                        yield_result = await callback(symbol, price)
-                        # Bot durdurulduysa WebSocket'ten çık
-                        if not yield_result and hasattr(callback, '__self__') and not callback.__self__.config.is_running:
-                            return
+                    if data.get("topic", "").startswith("tickers."):
+                        price_str = data.get("data", {}).get("lastPrice", 0)
+                        price = float(price_str) if price_str else 0
+                        if price > 0:
+                            await callback(symbol, price)
         except Exception as e:
-            print(f"[Binance] Bağlantı koptu ({e})")
+            print(f"[Bybit] Bağlantı koptu ({e})")
             await asyncio.sleep(3)
-            symbol_lower = symbol.lower()
-    url = f"{BINANCE_WS_URL}/{symbol_lower}@ticker"
-    
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    
-    while True:
-        try:
-            async with websockets.connect(url, ssl=ssl_context, ping_interval=20, ping_timeout=10) as ws:
-                print(f"[Binance] {symbol} izleniyor...")
-                async for message in ws:
-                    data = json.loads(message)
-                    price = float(data.get("c", 0))
-                    if price > 0:
-                        await callback(symbol, price)
-        except Exception as e:
-            print(f"[Binance] Bağlantı koptu, yeniden bağlanıyor... ({e})")
-            await asyncio.sleep(3)
-    symbol_lower = symbol.lower()
-    url = f"{BINANCE_WS_URL}/{symbol_lower}@ticker"
-    
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    
-    async with websockets.connect(url, ssl=ssl_context) as ws:
-        print(f"[Binance] {symbol} izleniyor...")
-        async for message in ws:
-            data = json.loads(message)
-            price = float(data.get("c", 0))
-            if price > 0:
-                await callback(symbol, price)
 
 def place_order(symbol: str, side: str, qty: float):
     """Bybit'e gerçek emir gönder"""
@@ -82,7 +52,7 @@ def place_order(symbol: str, side: str, qty: float):
         result = client.place_order(
             category="spot",
             symbol=symbol,
-            side=side,        # "Buy" veya "Sell"
+            side=side,
             orderType="Market",
             qty=str(qty),
         )
