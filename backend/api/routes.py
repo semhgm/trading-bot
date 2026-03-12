@@ -4,6 +4,7 @@ from bot.engine import engine
 from pydantic import BaseModel
 from auth import login, verify_token
 import asyncio
+from database import get_db
 
 router = APIRouter()
 security = HTTPBearer()
@@ -83,3 +84,21 @@ def get_balance(user=Depends(get_current_user)):
     from bot.bybit import get_balance as fetch_balance
     balance = fetch_balance("USDT")
     return {"balance": balance}
+
+@router.get("/trades")
+def get_trades(limit: int = 50, user=Depends(get_current_user)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT * FROM trades ORDER BY created_at DESC LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return {"trades": [dict(r) for r in rows]}
+
+@router.get("/sessions")
+def get_sessions(user=Depends(get_current_user)):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT * FROM sessions ORDER BY started_at DESC LIMIT 20
+    """).fetchall()
+    conn.close()
+    return {"sessions": [dict(r) for r in rows]}
