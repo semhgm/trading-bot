@@ -152,7 +152,7 @@ let interval = null
 
 const fetchStatus = async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/status')
+const res = await fetch(`${import.meta.env.VITE_API_URL}/api/status`)
     status.value = await res.json()
   } catch (e) {
     console.error('API bağlantı hatası:', e)
@@ -160,12 +160,12 @@ const fetchStatus = async () => {
 }
 
 const startBot = async () => {
-  await fetch('http://localhost:8000/api/start', { method: 'POST' })
+await fetch(`${import.meta.env.VITE_API_URL}/api/start`, { method: 'POST' })
   fetchStatus()
 }
 
 const stopBot = async () => {
-  await fetch('http://localhost:8000/api/stop', { method: 'POST' })
+await fetch(`${import.meta.env.VITE_API_URL}/api/stop`, { method: 'POST' })
   fetchStatus()
 }
 

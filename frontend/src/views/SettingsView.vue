@@ -106,7 +106,8 @@ const form = ref({
 })
 
 const fetchConfig = async () => {
-  const res = await fetch('http://localhost:8000/api/status')
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/status`)
+
   const data = await res.json()
   form.value.symbol = data.symbol
   form.value.buy_threshold = data.buy_threshold
@@ -118,7 +119,7 @@ const fetchConfig = async () => {
 }
 
 const saveConfig = async () => {
-  await fetch('http://localhost:8000/api/config', {
+  await fetch(`${import.meta.env.VITE_API_URL}/api/config`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(form.value)
