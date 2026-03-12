@@ -93,6 +93,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { apiFetch } from '../api.js'
 
 const saved = ref(false)
 const form = ref({
@@ -106,8 +107,8 @@ const form = ref({
 })
 
 const fetchConfig = async () => {
-  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/status`)
-
+  const res = await apiFetch('/api/status')
+  if (!res) return
   const data = await res.json()
   form.value.symbol = data.symbol
   form.value.buy_threshold = data.buy_threshold
@@ -119,9 +120,8 @@ const fetchConfig = async () => {
 }
 
 const saveConfig = async () => {
-  await fetch(`${import.meta.env.VITE_API_URL}/api/config`, {
+  await apiFetch('/api/config', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(form.value)
   })
   saved.value = true

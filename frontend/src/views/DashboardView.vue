@@ -5,6 +5,7 @@
       <h1 class="text-2xl font-bold text-white">Trading Bot</h1>
       <div class="flex items-center gap-4">
         <router-link to="/settings" class="text-gray-400 hover:text-white transition text-sm">⚙ Ayarlar</router-link>
+        <button @click="logout" class="text-gray-500 hover:text-red-400 transition text-sm">Çıkış</button>
         <div class="flex items-center gap-2">
           <div :class="status.is_running ? 'bg-green-500' : 'bg-red-500'" class="w-3 h-3 rounded-full"></div>
           <span class="text-sm text-gray-400">{{ status.is_running ? 'Çalışıyor' : 'Durduruldu' }}</span>
@@ -125,6 +126,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { apiFetch, logout } from '../api.js'
 
 const status = ref({
   is_running: false,
@@ -152,20 +154,20 @@ let interval = null
 
 const fetchStatus = async () => {
   try {
-const res = await fetch(`${import.meta.env.VITE_API_URL}/api/status`)
-    status.value = await res.json()
+    const res = await apiFetch('/api/status')
+    if (res) status.value = await res.json()
   } catch (e) {
     console.error('API bağlantı hatası:', e)
   }
 }
 
 const startBot = async () => {
-await fetch(`${import.meta.env.VITE_API_URL}/api/start`, { method: 'POST' })
+  await apiFetch('/api/start', { method: 'POST' })
   fetchStatus()
 }
 
 const stopBot = async () => {
-await fetch(`${import.meta.env.VITE_API_URL}/api/stop`, { method: 'POST' })
+  await apiFetch('/api/stop', { method: 'POST' })
   fetchStatus()
 }
 

@@ -1,10 +1,32 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from bot.engine import engine
 from pydantic import BaseModel
+from auth import login, verify_token
 import asyncio
 
 router = APIRouter()
+security = HTTPBearer()
 
+# --- Auth ---
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@router.post("/auth/login")
+def auth_login(req: LoginRequest):
+    token = login(req.username, req.password)
+    if not token:
+        raise HTTPException(status_code=401, detail="Kullanıcı adı veya şifre hatalı")
+    return {"token": token}
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user = verify_token(credentials.credentials)
+    if not user:
+        raise HTTPException(status_code=401, detail="Geçersiz token")
+    return user
+
+# --- Bot ---
 class ConfigUpdate(BaseModel):
     symbol: str = None
     buy_threshold: float = None
@@ -15,26 +37,24 @@ class ConfigUpdate(BaseModel):
     live_trading: bool = None
 
 @router.get("/status")
-def get_status():
+def get_status(user=Depends(get_current_user)):
     return engine.get_status()
 
 @router.post("/start")
-async def start_bot():
+async def start_bot(user=Depends(get_current_user)):
     if engine.config.is_running:
         return {"message": "Bot zaten çalışıyor"}
     asyncio.create_task(engine.start())
     return {"message": "Bot başlatıldı"}
 
 @router.post("/stop")
-def stop_bot():
+def stop_bot(user=Depends(get_current_user)):
     engine.stop()
     return {"message": "Bot durduruldu"}
 
 @router.post("/config")
-async def update_config(config: ConfigUpdate):
+async def update_config(config: ConfigUpdate, user=Depends(get_current_user)):
     was_running = engine.config.is_running
-    
-    # Önce durdur
     engine.stop()
     
     if config.symbol is not None:
@@ -52,7 +72,6 @@ async def update_config(config: ConfigUpdate):
     if config.live_trading is not None:
         engine.config.live_trading = config.live_trading
     
-    # Çalışıyorsa yeniden başlat
     if was_running:
         await asyncio.sleep(0.5)
         asyncio.create_task(engine.start())
@@ -60,7 +79,7 @@ async def update_config(config: ConfigUpdate):
     return {"message": "Config güncellendi", "config": vars(engine.config)}
 
 @router.get("/balance")
-def get_balance():
+def get_balance(user=Depends(get_current_user)):
     from bot.bybit import get_balance as fetch_balance
     balance = fetch_balance("USDT")
     return {"balance": balance}
