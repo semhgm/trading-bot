@@ -2,6 +2,10 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 from .bybit import watch_price, place_order, get_balance
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from database import get_db
 
 
 class BotConfig:
@@ -25,6 +29,7 @@ class TradingEngine:
         self.trade_history = []
         self.in_position = False
         self.balance: float = 0
+        self.session_id: Optional[int] = None
 
     def get_status(self):
         total_pnl = sum(t.get("pnl", 0) for t in self.trade_history)
@@ -105,6 +110,27 @@ class TradingEngine:
         self.trade_history.append(trade)
         self.daily_trades += 1
 
+        # SQLite'a kaydet
+        try:
+            conn = get_db()
+            conn.execute("""
+                INSERT INTO trades (symbol, side, price, quantity, pnl, commission, mode, reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                self.config.symbol,
+                side,
+                price,
+                qty,
+                round(pnl, 4),
+                round(commission, 4),
+                "live" if self.config.live_trading else "simulation",
+                reason
+            ))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DB] Kayıt hatası: {e}")
+
         if side == "Buy":
             self.in_position = True
             self.entry_price = price
@@ -125,14 +151,52 @@ class TradingEngine:
         self.trade_history = []
         if self.config.live_trading:
             self.balance = get_balance("USDT")
+
+        # Session başlat
+        try:
+            conn = get_db()
+            cursor = conn.execute("""
+                INSERT INTO sessions (symbol, mode)
+                VALUES (?, ?)
+            """, (
+                self.config.symbol,
+                "live" if self.config.live_trading else "simulation"
+            ))
+            self.session_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DB] Session başlatma hatası: {e}")
+
         print(f"[Engine] Bot başlatıldı → {self.config.symbol} | Live: {self.config.live_trading}")
         await watch_price(self.config.symbol, self.on_price_update)
 
     def stop(self):
         self.config.is_running = False
+
+        # Session kapat
+        if self.session_id:
+            try:
+                total_pnl = sum(t.get("pnl", 0) for t in self.trade_history)
+                total_commission = sum(t.get("commission", 0) for t in self.trade_history)
+                conn = get_db()
+                conn.execute("""
+                    UPDATE sessions
+                    SET stopped_at = CURRENT_TIMESTAMP,
+                        total_trades = ?,
+                        total_pnl = ?,
+                        total_commission = ?
+                    WHERE id = ?
+                """, (len(self.trade_history), round(total_pnl, 4), round(total_commission, 4), self.session_id))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"[DB] Session kapatma hatası: {e}")
+
         self.entry_price = None
         self.in_position = False
         self.current_price = 0
+        self.session_id = None
         print("[Engine] Bot durduruldu")
 
 

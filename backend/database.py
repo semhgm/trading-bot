@@ -23,7 +23,7 @@ def init_db():
         )
     """)
     
-    # Trade geçmişi tablosu (sonra lazım olacak)
+    # Trade geçmişi tablosu
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +34,22 @@ def init_db():
             pnl REAL DEFAULT 0,
             commission REAL DEFAULT 0,
             mode TEXT DEFAULT 'simulation',
+            reason TEXT DEFAULT 'SIGNAL',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Bot session tablosu
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            mode TEXT DEFAULT 'simulation',
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            stopped_at TIMESTAMP,
+            total_trades INTEGER DEFAULT 0,
+            total_pnl REAL DEFAULT 0,
+            total_commission REAL DEFAULT 0
         )
     """)
     
