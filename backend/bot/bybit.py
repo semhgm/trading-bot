@@ -7,8 +7,7 @@ from pybit.unified_trading import HTTP
 from dotenv import load_dotenv
 import os
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../.env'))
-
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '../.env'))
 BYBIT_WS_URL = "wss://stream.bybit.com/v5/public/spot"
 
 def get_bybit_client():
