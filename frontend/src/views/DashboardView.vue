@@ -99,8 +99,8 @@
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div class="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
-              <p class="text-gray-500 text-xs tracking-widest">MİKTAR</p>
-              <p class="text-white font-bold">${{ status.trade_amount }} USDT</p>
+              <p class="text-gray-500 text-xs tracking-widest">BAKİYE</p>
+              <p class="text-white font-bold">${{ balance.toFixed(2) }} USDT</p>
             </div>
             <div class="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
               <p class="text-gray-500 text-xs tracking-widest">MOD</p>
@@ -161,6 +161,17 @@ const status = ref({
   buy_threshold: -1.0, sell_threshold: 1.0, live_trading: false,
   total_pnl: 0, total_commission: 0, trade_history: []
 })
+const balance = ref(0)
+
+const fetchBalance = async () => {
+  try {
+    const res = await apiFetch('/api/balance')
+    if (res) {
+      const data = await res.json()
+      balance.value = data.balance
+    }
+  } catch (e) { console.error('Bakiye hatası:', e) }
+}
 
 const priceChange = computed(() => {
   if (!status.value.entry_price || !status.value.current_price) return 0
@@ -179,6 +190,6 @@ const fetchStatus = async () => {
 const startBot = async () => { await apiFetch('/api/start', { method: 'POST' }); fetchStatus() }
 const stopBot = async () => { await apiFetch('/api/stop', { method: 'POST' }); fetchStatus() }
 
-onMounted(() => { fetchStatus(); interval = setInterval(fetchStatus, 2000) })
+onMounted(() => { fetchStatus(); fetchBalance(); interval = setInterval(fetchStatus, 2000) })
 onUnmounted(() => clearInterval(interval))
 </script>
